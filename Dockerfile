@@ -2,13 +2,14 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies for PyTgCalls
+# Install system dependencies for PyTgCalls and yt-dlp
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
     gcc \
     libffi-dev \
     python3-dev \
+    make \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
