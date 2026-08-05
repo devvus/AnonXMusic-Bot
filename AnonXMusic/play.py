@@ -7,12 +7,8 @@ music_queue = []
 
 @Client.on_message(filters.command("play"))
 async def play_command(client: Client, message: Message):
-    from AnonXMusic.__main__ import call_py, HAS_PYTGCALLS
+    from AnonXMusic.__main__ import call_py
     
-    if not HAS_PYTGCALLS:
-        await message.reply_text("Music features are disabled in Sandbox Mode. Please deploy to Railway.")
-        return
-
     if len(message.command) < 2:
         await message.reply_text("Please provide a song name or link!")
         return
@@ -21,7 +17,13 @@ async def play_command(client: Client, message: Message):
     m = await message.reply_text(f"Searching for `{query}`... 🔍")
 
     try:
-        with YoutubeDL({'format': 'bestaudio', 'noplaylist': True}) as ydl:
+        ydl_opts = {
+            'format': 'bestaudio',
+            'noplaylist': True,
+            'quiet': True,
+            'default_search': 'ytsearch',
+        }
+        with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(query, download=False)
             if 'entries' in info:
                 info = info['entries'][0]
@@ -47,7 +49,6 @@ async def start_playback(chat_id: int, audio_url: str):
         print(f"Playback error: {e}")
 
 async def play_next_track(chat_id: int):
-    from AnonXMusic.__main__ import call_py
     if music_queue:
         music_queue.pop(0)
         if music_queue:

@@ -1,4 +1,5 @@
 kurigram>=2.2.21
+telethon
 py-tgcalls~=2.2.11
 yt-dlp[default]>=2026.3.17
 python-dotenv~=1.2.1
