@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from pyrogram import Client, idle, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from telethon import TelegramClient
@@ -101,6 +102,7 @@ async def play_handler(client: Client, message: Message):
     m = await message.reply_text(f"🔍 **Searching for** `{query}`... ✨")
 
     try:
+        # Most robust format selection: try bestaudio, then any audio, then best overall
         ydl_opts = {
             'format': 'bestaudio/best',
             'noplaylist': True,
@@ -108,13 +110,30 @@ async def play_handler(client: Client, message: Message):
             'default_search': 'ytsearch',
             'nocheckcertificate': True,
             'geo_bypass': True,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
         
         if os.path.exists(COOKIES_FILE_PATH):
             ydl_opts['cookiefile'] = COOKIES_FILE_PATH
+            logger.info(f"Using cookies from {COOKIES_FILE_PATH}")
 
         loop = asyncio.get_event_loop()
-        info = await loop.run_in_executor(None, lambda: YoutubeDL(ydl_opts).extract_info(query, download=False))
+        
+        # Function to extract info with fallback formats
+        def extract_info(q):
+            with YoutubeDL(ydl_opts) as ydl:
+                try:
+                    return ydl.extract_info(q, download=False)
+                except Exception as e:
+                    logger.warning(f"First attempt failed: {e}. Trying fallback format...")
+                    ydl.params['format'] = 'ba/b' # Basic bestaudio/best
+                    try:
+                        return ydl.extract_info(q, download=False)
+                    except Exception:
+                        ydl.params['format'] = 'best' # Ultimate fallback
+                        return ydl.extract_info(q, download=False)
+
+        info = await loop.run_in_executor(None, extract_info, query)
         
         if 'entries' in info:
             info = info['entries'][0]
@@ -122,6 +141,7 @@ async def play_handler(client: Client, message: Message):
         audio_url = info['url']
         title = info['title']
 
+        # Add to queue logic
         music_queue.append({'title': title, 'url': audio_url, 'chat_id': message.chat.id})
         
         if len(music_queue) == 1:
@@ -130,26 +150,12 @@ async def play_handler(client: Client, message: Message):
                 await m.edit_text(f"🎶 **Now playing:** **{title}** ✨")
             except Exception as e:
                 await m.edit_text(f"❌ **Playback Error:** `{e}`")
-                music_queue.clear()
+                music_queue.pop(0)
         else:
             await m.edit_text(f"🎼 **Added to queue:** **{title}** at position #{len(music_queue)-1} 🌸")
 
     except Exception as e:
-        # Fallback format if bestaudio fails
-        try:
-            ydl_opts['format'] = 'best'
-            info = await loop.run_in_executor(None, lambda: YoutubeDL(ydl_opts).extract_info(query, download=False))
-            if 'entries' in info: info = info['entries'][0]
-            audio_url = info['url']
-            title = info['title']
-            music_queue.append({'title': title, 'url': audio_url, 'chat_id': message.chat.id})
-            if len(music_queue) == 1:
-                await call_py.join_group_call(message.chat.id, AudioPiped(audio_url))
-                await m.edit_text(f"🎶 **Now playing:** **{title}** ✨")
-            else:
-                await m.edit_text(f"🎼 **Added to queue:** **{title}** at position #{len(music_queue)-1} 🌸")
-        except Exception as e2:
-            await m.edit_text(f"❌ **Error:** `{e2}`")
+        await m.edit_text(f"❌ **Error:** `{str(e)[:100]}`\n\nTry another song or check if the link is correct! 🌸")
 
 # --- CALLBACK HANDLERS ---
 
