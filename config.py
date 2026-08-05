@@ -20,8 +20,8 @@ LOG_CHAT_ID = int(os.getenv("LOG_CHAT_ID", "-1004356536394"))
 MONGO_DB_URI = os.getenv("MONGO_DB_URI", "mongodb+srv://Devvusz:Devvuszxx05231@cluster0.3rfouod.mongodb.net/?appName=Cluster0")
 
 # Branding & Links
-SUPPORT_CHAT = os.getenv("SUPPORT_CHAT", "https://t.me/XD_NETW0RK")
-SUPPORT_CHANNEL = os.getenv("SUPPORT_CHANNEL", "https://t.me/XD_NETW0RK")
+SUPPORT_CHAT = os.getenv("SUPPORT_CHAT", "https://t.me/infvibe")
+SUPPORT_CHANNEL = os.getenv("SUPPORT_CHANNEL", "https://t.me/infvibe")
 START_IMG_URL = os.getenv("START_IMG_URL", "https://images.alphacoders.com/131/1312385.jpeg")
 
 # Compatibility Aliases (for old code)

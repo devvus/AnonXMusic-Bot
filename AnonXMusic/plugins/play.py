@@ -11,6 +11,7 @@ logger = logging.getLogger("AnonXMusic.play")
 music_queue = []
 
 async def play_command(client: Client, message: Message):
+    # Dynamic import to avoid circular dependency
     from AnonXMusic.__main__ import call_py
     
     if len(message.command) < 2:
@@ -25,6 +26,7 @@ async def play_command(client: Client, message: Message):
         'format': "bestaudio/best",
         'noplaylist': True,
         'quiet': True,
+        'no_warnings': True,
         'nocheckcertificate': True,
         'geo_bypass': True,
         'default_search': 'ytsearch',
@@ -38,19 +40,22 @@ async def play_command(client: Client, message: Message):
         loop = asyncio.get_event_loop()
         
         def extract_info(q):
-            # Try 1: Best Audio
-            with YoutubeDL(ydl_opts) as ydl:
+            # We try multiple formats in sequence if the first one fails
+            formats_to_try = ["bestaudio/best", "bestaudio", "best", "ba/b"]
+            last_error = None
+            
+            for fmt in formats_to_try:
                 try:
-                    return ydl.extract_info(q, download=False)
-                except Exception as e:
-                    logger.warning(f"Try 1 failed: {e}. Trying fallback format...")
-                    # Try 2: Any audio/video format
-                    ydl.params['format'] = "best"
-                    try:
+                    current_opts = ydl_opts.copy()
+                    current_opts['format'] = fmt
+                    with YoutubeDL(current_opts) as ydl:
                         return ydl.extract_info(q, download=False)
-                    except Exception as e2:
-                        logger.error(f"Try 2 failed: {e2}")
-                        raise e2
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"Format {fmt} failed: {e}")
+                    continue
+            
+            raise last_error
 
         info = await loop.run_in_executor(None, extract_info, query)
         
@@ -64,9 +69,11 @@ async def play_command(client: Client, message: Message):
         
         if len(music_queue) == 1:
             try:
+                # Use MediaStream for PyTgCalls v2
                 await call_py.join_group_call(message.chat.id, MediaStream(audio_url))
                 await m.edit_text(f"🎶 **Now playing:** **{title}** ✨")
             except Exception as e:
+                logger.error(f"Playback Error: {e}")
                 await m.edit_text(f"❌ **Playback Error:** `{e}`")
                 music_queue.pop(0)
         else:
@@ -74,4 +81,8 @@ async def play_command(client: Client, message: Message):
 
     except Exception as e:
         logger.error(f"Final Error: {e}")
-        await m.edit_text(f"❌ **YouTube Error:** `{str(e)[:100]}`\n\nTry a different search term! 🌸")
+        error_msg = str(e)
+        if "Requested format is not available" in error_msg:
+            await m.edit_text("❌ **YouTube Error:** The requested audio format is not available for this video. Try another song! 🌸")
+        else:
+            await m.edit_text(f"❌ **YouTube Error:** `{error_msg[:100]}`\n\nTry a different search term! 🌸")

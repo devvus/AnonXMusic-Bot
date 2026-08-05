@@ -153,11 +153,29 @@ async def help_details_cb(client, query):
     content = details.get(cat, "Select a category!")
     await query.message.edit_caption(caption=content, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="help_menu")]]))
 
-# --- PLAY LOGIC ---
+# --- PLAY & CONTROLS LOGIC ---
 from AnonXMusic.plugins.play import play_command
+from AnonXMusic.plugins.controls import pause_command, resume_command, stop_command, skip_command
+
 @app.on_message(filters.command(["play", "play@Mdcikbot"]))
 async def play_h(client, message):
     await play_command(client, message)
+
+@app.on_message(filters.command(["pause", "pause@Mdcikbot"]))
+async def pause_h(client, message):
+    await pause_command(client, message)
+
+@app.on_message(filters.command(["resume", "resume@Mdcikbot"]))
+async def resume_h(client, message):
+    await resume_command(client, message)
+
+@app.on_message(filters.command(["stop", "stop@Mdcikbot"]))
+async def stop_h(client, message):
+    await stop_command(client, message)
+
+@app.on_message(filters.command(["skip", "skip@Mdcikbot"]))
+async def skip_h(client, message):
+    await skip_command(client, message)
 
 # --- STARTUP ---
 async def start_bot():
