@@ -1,8 +1,7 @@
 Pyrogram==2.0.106
-PyTgCalls
-python-dotenv==1.0.1
-aiohttp==3.9.5
-asyncio==3.4.3
-requests==2.32.3
-beautifulsoup4==4.12.3
+https://github.com/pytgcalls/pytgcalls/archive/master.tar.gz
 yt-dlp
+python-dotenv
+aiohttp
+requests
+beautifulsoup4
