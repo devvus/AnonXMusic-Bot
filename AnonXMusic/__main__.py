@@ -33,6 +33,7 @@ call_py = PyTgCalls(userbot)
 # Direct command in main for testing
 @app.on_message(filters.command("ping"))
 async def ping_test(client, message):
+    logger.info(f"Ping command received from {message.from_user.id}")
     await message.reply_text("🏓 Pong! Bot is working directly from main!")
 
 # Global logger to see if ANY message is received
@@ -45,11 +46,13 @@ async def main():
     try:
         # Start Pyrogram Bot
         await app.start()
-        logger.info("Pyrogram Bot Client started!")
+        bot_info = await app.get_me()
+        logger.info(f"Pyrogram Bot Client started as @{bot_info.username} (ID: {bot_info.id})")
         
         # Start Telethon Assistant
         await userbot.start()
-        logger.info("Telethon Assistant Client started!")
+        user_info = await userbot.get_me()
+        logger.info(f"Telethon Assistant Client started as {user_info.first_name} (ID: {user_info.id})")
         
         # Start PyTgCalls
         await call_py.start()
@@ -57,11 +60,11 @@ async def main():
 
         # Send startup message
         try:
-            await app.send_message(OWNER_ID, "🚀 Bot is online with Telethon Assistant on Railway! (Plugin Fix)")
+            await app.send_message(OWNER_ID, f"🚀 Bot @{bot_info.username} is online with Telethon Assistant on Railway!")
         except Exception as e:
             logger.error(f"Could not send startup message: {e}")
 
-        logger.info("Bot is fully online!")
+        logger.info("Bot is fully online and listening for messages...")
         
         await idle()
         
