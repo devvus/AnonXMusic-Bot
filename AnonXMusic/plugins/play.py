@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import shutil
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from yt_dlp import YoutubeDL
@@ -10,8 +11,12 @@ from config import COOKIES_FILE_PATH
 logger = logging.getLogger("AnonXMusic.play")
 music_queue = []
 
+# Ensure downloads directory exists
+DOWNLOAD_DIR = "downloads"
+if not os.path.exists(DOWNLOAD_DIR):
+    os.makedirs(DOWNLOAD_DIR)
+
 async def play_command(client: Client, message: Message):
-    # Dynamic import to avoid circular dependency
     from AnonXMusic.__main__ import call_py
     
     if len(message.command) < 2:
@@ -21,9 +26,10 @@ async def play_command(client: Client, message: Message):
     query = " ".join(message.command[1:])
     m = await message.reply_text(f"🔍 **Searching for** `{query}`... ✨")
 
-    # The most robust YTDL options possible
+    # Robust YTDL Options for Downloading
     ydl_opts = {
-        'format': "bestaudio/best",
+        'format': "bestaudio[ext=webm][acodec=opus]/bestaudio/best",
+        'outtmpl': f'{DOWNLOAD_DIR}/%(id)s.%(ext)s',
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
@@ -39,50 +45,54 @@ async def play_command(client: Client, message: Message):
     try:
         loop = asyncio.get_event_loop()
         
-        def extract_info(q):
-            # We try multiple formats in sequence if the first one fails
-            formats_to_try = ["bestaudio/best", "bestaudio", "best", "ba/b"]
-            last_error = None
-            
-            for fmt in formats_to_try:
+        def download_info(q):
+            with YoutubeDL(ydl_opts) as ydl:
                 try:
-                    current_opts = ydl_opts.copy()
-                    current_opts['format'] = fmt
-                    with YoutubeDL(current_opts) as ydl:
-                        return ydl.extract_info(q, download=False)
+                    # First extract info
+                    info = ydl.extract_info(q, download=True)
+                    if 'entries' in info:
+                        info = info['entries'][0]
+                    return info
                 except Exception as e:
-                    last_error = e
-                    logger.warning(f"Format {fmt} failed: {e}")
-                    continue
-            
-            raise last_error
+                    logger.warning(f"Download failed: {e}. Trying fallback...")
+                    ydl.params['format'] = "bestaudio/best"
+                    info = ydl.extract_info(q, download=True)
+                    if 'entries' in info:
+                        info = info['entries'][0]
+                    return info
 
-        info = await loop.run_in_executor(None, extract_info, query)
+        info = await loop.run_in_executor(None, download_info, query)
         
-        if 'entries' in info:
-            info = info['entries'][0]
-        
-        audio_url = info['url']
+        video_id = info['id']
+        ext = info['ext']
+        file_path = os.path.join(DOWNLOAD_DIR, f"{video_id}.{ext}")
         title = info['title']
 
-        music_queue.append({'title': title, 'url': audio_url, 'chat_id': message.chat.id})
+        music_queue.append({'title': title, 'file_path': file_path, 'chat_id': message.chat.id})
         
         if len(music_queue) == 1:
             try:
-                # Use MediaStream for PyTgCalls v2
-                await call_py.join_group_call(message.chat.id, MediaStream(audio_url))
+                # Use local file path for MediaStream
+                await call_py.join_group_call(
+                    message.chat.id, 
+                    MediaStream(file_path)
+                )
                 await m.edit_text(f"🎶 **Now playing:** **{title}** ✨")
             except Exception as e:
                 logger.error(f"Playback Error: {e}")
                 await m.edit_text(f"❌ **Playback Error:** `{e}`")
+                if os.path.exists(file_path):
+                    os.remove(file_path)
                 music_queue.pop(0)
         else:
             await m.edit_text(f"🎼 **Added to queue:** **{title}** at position #{len(music_queue)-1} 🌸")
 
     except Exception as e:
         logger.error(f"Final Error: {e}")
-        error_msg = str(e)
-        if "Requested format is not available" in error_msg:
-            await m.edit_text("❌ **YouTube Error:** The requested audio format is not available for this video. Try another song! 🌸")
-        else:
-            await m.edit_text(f"❌ **YouTube Error:** `{error_msg[:100]}`\n\nTry a different search term! 🌸")
+        await m.edit_text(f"❌ **YouTube Error:** `{str(e)[:100]}`\n\nTry a different search term! 🌸")
+
+# Cleanup function to be called periodically or on exit
+def cleanup_downloads():
+    if os.path.exists(DOWNLOAD_DIR):
+        shutil.rmtree(DOWNLOAD_DIR)
+        os.makedirs(DOWNLOAD_DIR)

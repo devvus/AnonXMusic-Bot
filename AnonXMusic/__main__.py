@@ -177,6 +177,21 @@ async def stop_h(client, message):
 async def skip_h(client, message):
     await skip_command(client, message)
 
+# --- STREAM END HANDLER ---
+from pytgcalls.types import Update
+
+@call_py.on_update()
+async def stream_end_handler(client, update: Update):
+    from AnonXMusic.plugins.play import music_queue
+    if not isinstance(update, Update):
+        return
+    
+    # Check if stream ended
+    # In pytgcalls v2, we check for stream end in a different way or use specific events
+    # For simplicity, we can also use a loop in the background, but decorators are better.
+    # According to pytgcalls docs, we can handle stream end events.
+    pass
+
 # --- STARTUP ---
 async def start_bot():
     logger.info("Starting Refactored AnonXMusic...")
