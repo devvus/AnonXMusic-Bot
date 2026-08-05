@@ -1,6 +1,8 @@
+import os
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from yt_dlp import YoutubeDL
+from config import COOKIES_FILE_PATH
 
 # Queue for music playback
 music_queue = []
@@ -23,6 +25,11 @@ async def play_command(client: Client, message: Message):
             'quiet': True,
             'default_search': 'ytsearch',
         }
+        
+        # Add cookies if the file exists
+        if os.path.exists(COOKIES_FILE_PATH):
+            ydl_opts['cookiefile'] = COOKIES_FILE_PATH
+
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(query, download=False)
             if 'entries' in info:

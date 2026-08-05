@@ -6,5 +6,11 @@ STRING_SESSION = os.getenv("STRING_SESSION", "1BVtsOKEBu4xzILcEjJ9Qx9cQS7SeOD1OM
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8913524572:AAEVVBg7Aq2G5A8uaI-wjYMIVGWjujTLn-A")
 OWNER_ID = int(os.getenv("OWNER_ID", "1499705163"))
 LOG_GROUP_ID = int(os.getenv("LOG_GROUP_ID", "-1001973634248"))
-LOG_CHAT_ID = int(os.getenv("LOG_CHAT_ID", "-1004356536394"))
-MONGO_DB_URI = os.getenv("MONGO_DB_URI", "mongodb+srv://Devvusz:Devvuszxx05231@cluster0.3rfouod.mongodb.net/?appName=Cluster0")
+
+# Aesthetic Configuration
+START_IMG_URL = os.getenv("START_IMG_URL", "https://images.alphacoders.com/131/1312385.jpeg")
+SUPPORT_URL = os.getenv("SUPPORT_URL", "https://t.me/AnonXSupport")
+CHANNEL_URL = os.getenv("CHANNEL_URL", "https://t.me/AnonXUpdates")
+
+# yt-dlp Configuration
+COOKIES_FILE_PATH = os.path.join(os.getcwd(), "cookies.txt")
