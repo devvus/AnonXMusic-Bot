@@ -7,13 +7,13 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from pytgcalls import PyTgCalls
 from config import API_ID, API_HASH, STRING_SESSION, BOT_TOKEN, OWNER_ID, START_IMG_URL, SUPPORT_URL, CHANNEL_URL
-from AnonXMusic.plugins.play import play_command
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 logger = logging.getLogger("AnonXMusic")
 
-# Initialize Pyrogram Bot Client (No plugins root to avoid conflicts)
+# Initialize Pyrogram Bot Client
+# We initialize without plugins root to handle everything here for maximum reliability
 app = Client(
     "AnonXBotFinal",
     api_id=API_ID,
@@ -32,6 +32,20 @@ userbot = TelegramClient(
 # Initialize PyTgCalls with Telethon client
 call_py = PyTgCalls(userbot)
 
+# --- UI STRINGS & HELPERS ---
+
+START_TEXT = (
+    "✨ **Hey {mention}**, \n\n"
+    "🌸 **This is {bot_name}** ! 🎶\n\n"
+    "🎀 **A fast and powerful music player bot for Telegram voice chats.**\n\n"
+    "💖 **Enjoy high-quality music with your friends! Click the buttons below for more info.** ✨"
+)
+
+HELP_TEXT = (
+    "✨ **Click the buttons below to explore my commands!** 🌸\n\n"
+    "📌 **Note:** All commands can be used with a `/` prefix."
+)
+
 # --- HANDLERS ---
 
 @app.on_message(filters.command("start"))
@@ -39,14 +53,7 @@ async def start_command(client: Client, message: Message):
     bot_info = await client.get_me()
     bot_name = bot_info.first_name
     bot_username = bot_info.username
-    user_mention = message.from_user.mention
-    
-    caption = (
-        f"✨ Hey {user_mention},\n"
-        f"🌸 This is {bot_name} ! 🎶\n\n"
-        f"🎀 A music player bot with some awesome and useful features!\n\n"
-        f"💖 Click on the help button for more info ✨"
-    )
+    mention = message.from_user.mention
     
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add me to your group ➕", url=f"https://t.me/{bot_username}?startgroup=true")],
@@ -56,15 +63,32 @@ async def start_command(client: Client, message: Message):
     
     if START_IMG_URL:
         try:
-            await message.reply_photo(photo=START_IMG_URL, caption=caption, reply_markup=buttons)
-        except Exception:
-            await message.reply_text(text=caption, reply_markup=buttons)
+            await message.reply_photo(
+                photo=START_IMG_URL,
+                caption=START_TEXT.format(mention=mention, bot_name=bot_name),
+                reply_markup=buttons
+            )
+        except Exception as e:
+            logger.error(f"Error sending start photo: {e}")
+            await message.reply_text(
+                text=START_TEXT.format(mention=mention, bot_name=bot_name),
+                reply_markup=buttons
+            )
     else:
-        await message.reply_text(text=caption, reply_markup=buttons)
+        await message.reply_text(
+            text=START_TEXT.format(mention=mention, bot_name=bot_name),
+            reply_markup=buttons
+        )
 
 @app.on_message(filters.command("help"))
 async def help_command(client: Client, message: Message):
     await show_help_menu(client, message)
+
+@app.on_message(filters.command("ping"))
+async def ping_command(client, message):
+    await message.reply_text("🏓 **Pong! Bot is active and healthy!** ✨")
+
+# --- CALLBACK HANDLERS ---
 
 @app.on_callback_query(filters.regex("help_menu"))
 async def help_menu_callback(client: Client, callback_query: CallbackQuery):
@@ -75,14 +99,7 @@ async def main_menu_callback(client: Client, callback_query: CallbackQuery):
     bot_info = await client.get_me()
     bot_name = bot_info.first_name
     bot_username = bot_info.username
-    user_mention = callback_query.from_user.mention
-    
-    caption = (
-        f"✨ Hey {user_mention},\n"
-        f"🌸 This is {bot_name} ! 🎶\n\n"
-        f"🎀 A music player bot with some awesome and useful features!\n\n"
-        f"💖 Click on the help button for more info ✨"
-    )
+    mention = callback_query.from_user.mention
     
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add me to your group ➕", url=f"https://t.me/{bot_username}?startgroup=true")],
@@ -91,16 +108,43 @@ async def main_menu_callback(client: Client, callback_query: CallbackQuery):
     ])
     
     try:
-        await callback_query.message.edit_caption(caption=caption, reply_markup=buttons)
+        await callback_query.message.edit_caption(
+            caption=START_TEXT.format(mention=mention, bot_name=bot_name),
+            reply_markup=buttons
+        )
     except Exception:
-        await callback_query.message.edit_text(text=caption, reply_markup=buttons)
+        await callback_query.message.edit_text(
+            text=START_TEXT.format(mention=mention, bot_name=bot_name),
+            reply_markup=buttons
+        )
+
+@app.on_callback_query(filters.regex(r"help_(.*)"))
+async def help_category_callback(client: Client, callback_query: CallbackQuery):
+    category = callback_query.data.split("_")[1]
+    
+    # Simple help content for each category
+    help_contents = {
+        "admins": "👑 **Admin Commands:**\n\n/pause - Pause playback\n/resume - Resume playback\n/skip - Skip current track\n/stop - Stop playback",
+        "auth": "🔐 **Auth Commands:**\n\n/auth - Authorize a user\n/unauth - Unauthorize a user\n/authusers - List authorized users",
+        "blacklist": "🚫 **Blacklist Commands:**\n\n/blacklistchat - Blacklist a chat\n/whitelistchat - Whitelist a chat\n/blacklistedchats - List blacklisted chats",
+        "lang": "🌐 **Language Commands:**\n\n/language - Change bot language",
+        "ping": "🏓 **Ping Commands:**\n\n/ping - Check bot latency and status",
+        "play": "🎵 **Play Commands:**\n\n/play [song name/link] - Play music in voice chat",
+        "queue": "🎼 **Queue Commands:**\n\n/queue - View current music queue",
+        "stats": "📊 **Stats Commands:**\n\n/stats - View bot statistics",
+        "sudo": "⚡ **Sudo Commands:**\n\n/gcast - Broadcast a message\n/addsudo - Add a sudo user\n/delsudo - Remove a sudo user"
+    }
+    
+    content = help_contents.get(category, "🌸 Select a category for more info!")
+    
+    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="help_menu")]])
+    
+    try:
+        await callback_query.message.edit_caption(caption=content, reply_markup=buttons)
+    except Exception:
+        await callback_query.message.edit_text(text=content, reply_markup=buttons)
 
 async def show_help_menu(client: Client, message: Message, edit=False):
-    caption = (
-        "✨ Click the buttons below to get information about my commands! 🌸\n\n"
-        "📌 Note: All commands can be used with /"
-    )
-    
     buttons = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("👑 Admins", callback_data="help_admins"),
@@ -122,23 +166,21 @@ async def show_help_menu(client: Client, message: Message, edit=False):
     
     if edit:
         try:
-            await message.edit_caption(caption=caption, reply_markup=buttons)
+            await message.edit_caption(caption=HELP_TEXT, reply_markup=buttons)
         except Exception:
-            await message.edit_text(text=caption, reply_markup=buttons)
+            await message.edit_text(text=HELP_TEXT, reply_markup=buttons)
     else:
         if START_IMG_URL:
             try:
-                await message.reply_photo(photo=START_IMG_URL, caption=caption, reply_markup=buttons)
+                await message.reply_photo(photo=START_IMG_URL, caption=HELP_TEXT, reply_markup=buttons)
             except Exception:
-                await message.reply_text(text=caption, reply_markup=buttons)
+                await message.reply_text(text=HELP_TEXT, reply_markup=buttons)
         else:
-            await message.reply_text(text=caption, reply_markup=buttons)
+            await message.reply_text(text=HELP_TEXT, reply_markup=buttons)
 
-@app.on_message(filters.command("ping"))
-async def ping_command(client, message):
-    await message.reply_text("🏓 Pong! Bot is active and healthy! ✨")
+# --- PLAY LOGIC (Integrated for reliability) ---
 
-# Manually register the play command from the plugin
+from AnonXMusic.plugins.play import play_command
 @app.on_message(filters.command("play"))
 async def play_handler(client, message):
     await play_command(client, message)
@@ -146,7 +188,7 @@ async def play_handler(client, message):
 # --- MAIN STARTUP ---
 
 async def main():
-    logger.info("Starting bot and assistant (Telethon)...")
+    logger.info("Starting AnonXMusic Bot...")
     try:
         # Start Pyrogram Bot
         await app.start()
@@ -163,7 +205,7 @@ async def main():
 
         # Send startup message to Owner
         try:
-            await app.send_message(OWNER_ID, f"🚀 Bot @{bot_info.username} is online with Telethon Assistant on Railway!")
+            await app.send_message(OWNER_ID, f"🚀 **Bot @{bot_info.username} is online with Cute Anime UI!** ✨")
         except Exception as e:
             logger.error(f"Could not send startup message: {e}")
 
