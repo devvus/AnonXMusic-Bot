@@ -1,16 +1,17 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from AnonXMusic.__main__ import app
-from pytgcalls import StreamType
-from pytgcalls.types import AudioPiped, AudioVideoPiped
-from youtube_dlp import YoutubeDL
-from AnonXMusic.__main__ import call_py
+from AnonXMusic.__main__ import app, userbot, call_py, HAS_PYTGCALLS
+from yt_dlp import YoutubeDL
 
 # Queue for music playback
 music_queue = []
 
 @app.on_message(filters.command("play"))
 async def play_command(client: Client, message: Message):
+    if not HAS_PYTGCALLS:
+        await message.reply_text("Music features are currently disabled in this environment (Sandbox). Please deploy to Railway for full functionality.")
+        return
+
     if len(message.command) < 2:
         await message.reply_text("Please provide a song name or link to play.")
         return
@@ -38,17 +39,19 @@ async def play_command(client: Client, message: Message):
         await message.reply_text(f"Error playing music: {e}")
 
 async def start_playback(client: Client, chat_id: int, audio_url: str):
+    if not HAS_PYTGCALLS: return
     try:
+        from pytgcalls.types import AudioPiped
+        from pytgcalls import StreamType
         await call_py.join_group_call(
             chat_id,
-            AudioPiped(audio_url),
-            stream_type=StreamType().pulse_stream
+            AudioPiped(audio_url)
         )
     except Exception as e:
         print(f"Error joining group call: {e}")
-        # Handle cases where bot is not in VC or other errors
 
 async def play_next_track(client: Client, chat_id: int):
+    if not HAS_PYTGCALLS: return
     if music_queue:
         music_queue.pop(0) # Remove current track
         if music_queue:
@@ -58,4 +61,3 @@ async def play_next_track(client: Client, chat_id: int):
         else:
             await client.send_message(chat_id, "Queue is empty. Leaving voice chat.")
             await call_py.leave_group_call(chat_id)
-

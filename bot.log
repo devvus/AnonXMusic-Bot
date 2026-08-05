@@ -1,0 +1,11 @@
+nohup: ignoring input
+TgCrypto is missing! Pyrogram will work the same, but at a much slower speed. More info: https://docs.pyrogram.org/topics/speedups
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ubuntu/MusicBot/AnonXMusic/__main__.py", line 6, in <module>
+    from config import API_ID, API_HASH, STRING_SESSION, OWNER_ID, LOG_GROUP_ID, LOG_CHAT_ID, MONGO_DB_URI
+  File "/home/ubuntu/MusicBot/config.py", line 3, in <module>
+    API_ID = int(os.getenv("API_ID", "2cebc99bd8378b5237b31ea8e7496d79"))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: invalid literal for int() with base 10: '2cebc99bd8378b5237b31ea8e7496d79'
