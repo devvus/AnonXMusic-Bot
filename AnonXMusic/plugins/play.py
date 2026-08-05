@@ -54,8 +54,19 @@ async def play_command(client: Client, message: Message):
                         info = info['entries'][0]
                     return info
                 except Exception as e:
-                    logger.warning(f"Download failed: {e}. Trying fallback...")
-                    ydl.params['format'] = "bestaudio/best"
+                    logger.error(f"DETAILED YTDL ERROR: {e}")
+                    # Debug: Try to list formats to see what is available from this IP
+                    try:
+                        with YoutubeDL({'quiet': True, 'cookiefile': COOKIES_FILE_PATH if os.path.exists(COOKIES_FILE_PATH) else None}) as ydl_debug:
+                            debug_info = ydl_debug.extract_info(q, download=False)
+                            formats = debug_info.get('formats', [])
+                            format_ids = [f.get('format_id') for f in formats]
+                            logger.info(f"AVAILABLE FORMATS FOR {q}: {format_ids}")
+                    except Exception as de:
+                        logger.error(f"COULD NOT EVEN LIST FORMATS: {de}")
+                    
+                    logger.warning(f"Download failed: {e}. Trying fallback to 'best'...")
+                    ydl.params['format'] = "best"
                     info = ydl.extract_info(q, download=True)
                     if 'entries' in info:
                         info = info['entries'][0]
