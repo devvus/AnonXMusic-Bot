@@ -27,14 +27,8 @@ async def play_command(client: Client, message: Message):
     query = " ".join(message.command[1:])
     m = await message.reply_text(f"🔍 **Searching for** `{query}`... ✨")
 
-    # Dynamic User-Agent Rotation
-    USER_AGENTS = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
-    ]
-
-    base_ydl_opts = {
+    # The most robust YTDL options to bypass YouTube blocks on Cloud IPs
+    ydl_opts = {
         'outtmpl': f'{DOWNLOAD_DIR}/%(id)s.%(ext)s',
         'noplaylist': True,
         'quiet': True,
@@ -42,64 +36,43 @@ async def play_command(client: Client, message: Message):
         'nocheckcertificate': True,
         'geo_bypass': True,
         'default_search': 'ytsearch',
-        'user_agent': random.choice(USER_AGENTS),
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'web', 'ios'],
+                'player_client': ['android_vr', 'android', 'web', 'ios'],
                 'skip': ['dash', 'hls']
             }
-        }
+        },
+        # Smart format selection: Try audio first, then anything that works
+        'format': 'bestaudio/ba/best',
     }
     
     if os.path.exists(COOKIES_FILE_PATH):
-        base_ydl_opts['cookiefile'] = COOKIES_FILE_PATH
+        ydl_opts['cookiefile'] = COOKIES_FILE_PATH
+        logger.info(f"Using cookies: {COOKIES_FILE_PATH}")
 
     try:
         loop = asyncio.get_event_loop()
         
-        def dynamic_download(q):
-            # Step 1: Detect available formats dynamically
-            with YoutubeDL(base_ydl_opts) as ydl:
-                try:
-                    info = ydl.extract_info(q, download=False)
-                    if 'entries' in info:
-                        info = info['entries'][0]
-                    
-                    video_id = info['id']
-                    formats = info.get('formats', [])
-                    
-                    # Step 2: Filter and rank formats
-                    # Priority: Audio-only opus > Audio-only m4a > Best Audio > Any stream with audio
-                    audio_formats = [f for f in formats if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
-                    
-                    best_format = None
-                    if audio_formats:
-                        # Try to find opus/webm first for performance
-                        opus = [f for f in audio_formats if f.get('ext') == 'webm' or 'opus' in f.get('acodec', '').lower()]
-                        if opus:
-                            best_format = opus[0]['format_id']
-                        else:
-                            best_format = audio_formats[0]['format_id']
-                    
-                    # Step 3: Download with chosen format or fallback
-                    final_opts = base_ydl_opts.copy()
-                    if best_format:
-                        final_opts['format'] = f"{best_format}/bestaudio/best"
-                    else:
-                        final_opts['format'] = "bestaudio/best"
-                        
-                    with YoutubeDL(final_opts) as ydl_final:
-                        return ydl_final.extract_info(video_id, download=True)
-                        
-                except Exception as e:
-                    logger.warning(f"Dynamic detection failed: {e}. Falling back to aggressive mode.")
-                    # Aggressive Fallback: Just get 'best' and let yt-dlp handle it
-                    fallback_opts = base_ydl_opts.copy()
-                    fallback_opts['format'] = "best"
-                    with YoutubeDL(fallback_opts) as ydl_fb:
-                        return ydl_fb.extract_info(q, download=True)
+        def download_song(q):
+            # Attempt 1: Standard download with fallbacks
+            try:
+                with YoutubeDL(ydl_opts) as ydl:
+                    return ydl.extract_info(q, download=True)
+            except Exception as e:
+                logger.warning(f"Attempt 1 failed: {e}. Trying Attempt 2 with zero format restrictions...")
+                
+            # Attempt 2: No format restriction at all (Let yt-dlp pick ANYTHING)
+            try:
+                opts_no_fmt = ydl_opts.copy()
+                opts_no_fmt['format'] = None # Let yt-dlp decide its own best fallback
+                with YoutubeDL(opts_no_fmt) as ydl_none:
+                    return ydl_none.extract_info(q, download=True)
+            except Exception as e:
+                logger.error(f"Attempt 2 failed: {e}. Trying final Search fallback...")
+                raise e
 
-        info = await loop.run_in_executor(None, dynamic_download, query)
+        info = await loop.run_in_executor(None, download_song, query)
         
         if 'entries' in info:
             info = info['entries'][0]
@@ -107,10 +80,10 @@ async def play_command(client: Client, message: Message):
         video_id = info['id']
         title = info['title']
         
-        # Verify file existence (yt-dlp might change extension during merge/conversion)
+        # Check all possible extensions (mp4, webm, m4a, etc.)
         files = [f for f in os.listdir(DOWNLOAD_DIR) if f.startswith(video_id)]
         if not files:
-            raise Exception("Download completed but file not found on disk.")
+            raise Exception("YouTube blocked the download or no valid format was found. Please check your cookies.txt or try another song.")
             
         file_path = os.path.join(DOWNLOAD_DIR, files[0])
 
@@ -133,14 +106,12 @@ async def play_command(client: Client, message: Message):
             await m.edit_text(f"🎼 **Added to queue:** **{title}** at position #{len(music_queue)-1} 🌸")
 
     except Exception as e:
-        logger.error(f"Final YouTube Error: {e}")
-        await m.edit_text(
-            f"❌ **YouTube Error:** `{str(e)[:100]}`\n\n"
-            "**Troubleshooting:**\n"
-            "1. Try a different song name.\n"
-            "2. Ensure the bot is not blocked by YouTube.\n"
-            "3. Update your cookies.txt if the problem persists. 🌸"
-        )
+        logger.error(f"Ultimate Extraction Error: {e}")
+        error_msg = str(e)
+        if "Sign in to confirm you're not a bot" in error_msg or "429" in error_msg:
+            await m.edit_text("❌ **YouTube Error:** YouTube has blocked this request. Please update your `cookies.txt` file with a fresh session! 🌸")
+        else:
+            await m.edit_text(f"❌ **YouTube Error:** `{error_msg[:100]}`\n\nTry searching with a different name! 🌸")
 
 def cleanup_downloads():
     if os.path.exists(DOWNLOAD_DIR):
