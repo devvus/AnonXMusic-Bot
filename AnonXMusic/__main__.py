@@ -16,7 +16,7 @@ app = Client(
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
-    plugins=dict(root="AnonXMusic"),
+    plugins=dict(root="AnonXMusic/plugins"),
     in_memory=True
 )
 
@@ -29,6 +29,11 @@ userbot = TelegramClient(
 
 # Initialize PyTgCalls with Telethon client
 call_py = PyTgCalls(userbot)
+
+# Direct command in main for testing
+@app.on_message(filters.command("ping"))
+async def ping_test(client, message):
+    await message.reply_text("🏓 Pong! Bot is working directly from main!")
 
 # Global logger to see if ANY message is received
 @app.on_message(group=-1)
@@ -52,9 +57,9 @@ async def main():
 
         # Send startup message
         try:
-            await app.send_message(OWNER_ID, "🚀 Bot is online with Telethon Assistant on Railway! (Debug Mode)")
+            await app.send_message(OWNER_ID, "🚀 Bot is online with Telethon Assistant on Railway! (Plugin Fix)")
         except Exception as e:
-            logger.warning(f"Failed to send startup message to owner: {e}")
+            logger.error(f"Could not send startup message: {e}")
 
         logger.info("Bot is fully online!")
         
