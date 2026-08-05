@@ -6,14 +6,15 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from pytgcalls import PyTgCalls
-from config import API_ID, API_HASH, STRING_SESSION, BOT_TOKEN, OWNER_ID, START_IMG_URL, SUPPORT_URL, CHANNEL_URL
+from pytgcalls.types import AudioPiped
+from yt_dlp import YoutubeDL
+from config import API_ID, API_HASH, STRING_SESSION, BOT_TOKEN, OWNER_ID, START_IMG_URL, SUPPORT_URL, CHANNEL_URL, COOKIES_FILE_PATH
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 logger = logging.getLogger("AnonXMusic")
 
 # Initialize Pyrogram Bot Client
-# We initialize without plugins root to handle everything here for maximum reliability
 app = Client(
     "AnonXBotFinal",
     api_id=API_ID,
@@ -32,7 +33,10 @@ userbot = TelegramClient(
 # Initialize PyTgCalls with Telethon client
 call_py = PyTgCalls(userbot)
 
-# --- UI STRINGS & HELPERS ---
+# Queue for music playback
+music_queue = []
+
+# --- UI STRINGS ---
 
 START_TEXT = (
     "✨ **Hey {mention}**, \n\n"
@@ -68,8 +72,7 @@ async def start_command(client: Client, message: Message):
                 caption=START_TEXT.format(mention=mention, bot_name=bot_name),
                 reply_markup=buttons
             )
-        except Exception as e:
-            logger.error(f"Error sending start photo: {e}")
+        except Exception:
             await message.reply_text(
                 text=START_TEXT.format(mention=mention, bot_name=bot_name),
                 reply_markup=buttons
@@ -87,6 +90,66 @@ async def help_command(client: Client, message: Message):
 @app.on_message(filters.command("ping"))
 async def ping_command(client, message):
     await message.reply_text("🏓 **Pong! Bot is active and healthy!** ✨")
+
+@app.on_message(filters.command("play"))
+async def play_handler(client: Client, message: Message):
+    if len(message.command) < 2:
+        await message.reply_text("❌ **Please provide a song name or link!**")
+        return
+
+    query = " ".join(message.command[1:])
+    m = await message.reply_text(f"🔍 **Searching for** `{query}`... ✨")
+
+    try:
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'noplaylist': True,
+            'quiet': True,
+            'default_search': 'ytsearch',
+            'nocheckcertificate': True,
+            'geo_bypass': True,
+        }
+        
+        if os.path.exists(COOKIES_FILE_PATH):
+            ydl_opts['cookiefile'] = COOKIES_FILE_PATH
+
+        loop = asyncio.get_event_loop()
+        info = await loop.run_in_executor(None, lambda: YoutubeDL(ydl_opts).extract_info(query, download=False))
+        
+        if 'entries' in info:
+            info = info['entries'][0]
+        
+        audio_url = info['url']
+        title = info['title']
+
+        music_queue.append({'title': title, 'url': audio_url, 'chat_id': message.chat.id})
+        
+        if len(music_queue) == 1:
+            try:
+                await call_py.join_group_call(message.chat.id, AudioPiped(audio_url))
+                await m.edit_text(f"🎶 **Now playing:** **{title}** ✨")
+            except Exception as e:
+                await m.edit_text(f"❌ **Playback Error:** `{e}`")
+                music_queue.clear()
+        else:
+            await m.edit_text(f"🎼 **Added to queue:** **{title}** at position #{len(music_queue)-1} 🌸")
+
+    except Exception as e:
+        # Fallback format if bestaudio fails
+        try:
+            ydl_opts['format'] = 'best'
+            info = await loop.run_in_executor(None, lambda: YoutubeDL(ydl_opts).extract_info(query, download=False))
+            if 'entries' in info: info = info['entries'][0]
+            audio_url = info['url']
+            title = info['title']
+            music_queue.append({'title': title, 'url': audio_url, 'chat_id': message.chat.id})
+            if len(music_queue) == 1:
+                await call_py.join_group_call(message.chat.id, AudioPiped(audio_url))
+                await m.edit_text(f"🎶 **Now playing:** **{title}** ✨")
+            else:
+                await m.edit_text(f"🎼 **Added to queue:** **{title}** at position #{len(music_queue)-1} 🌸")
+        except Exception as e2:
+            await m.edit_text(f"❌ **Error:** `{e2}`")
 
 # --- CALLBACK HANDLERS ---
 
@@ -121,8 +184,6 @@ async def main_menu_callback(client: Client, callback_query: CallbackQuery):
 @app.on_callback_query(filters.regex(r"help_(.*)"))
 async def help_category_callback(client: Client, callback_query: CallbackQuery):
     category = callback_query.data.split("_")[1]
-    
-    # Simple help content for each category
     help_contents = {
         "admins": "👑 **Admin Commands:**\n\n/pause - Pause playback\n/resume - Resume playback\n/skip - Skip current track\n/stop - Stop playback",
         "auth": "🔐 **Auth Commands:**\n\n/auth - Authorize a user\n/unauth - Unauthorize a user\n/authusers - List authorized users",
@@ -134,11 +195,8 @@ async def help_category_callback(client: Client, callback_query: CallbackQuery):
         "stats": "📊 **Stats Commands:**\n\n/stats - View bot statistics",
         "sudo": "⚡ **Sudo Commands:**\n\n/gcast - Broadcast a message\n/addsudo - Add a sudo user\n/delsudo - Remove a sudo user"
     }
-    
     content = help_contents.get(category, "🌸 Select a category for more info!")
-    
     buttons = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="help_menu")]])
-    
     try:
         await callback_query.message.edit_caption(caption=content, reply_markup=buttons)
     except Exception:
@@ -163,7 +221,6 @@ async def show_help_menu(client: Client, message: Message, edit=False):
         ],
         [InlineKeyboardButton("🔙 Back", callback_data="main_menu")]
     ])
-    
     if edit:
         try:
             await message.edit_caption(caption=HELP_TEXT, reply_markup=buttons)
@@ -178,49 +235,29 @@ async def show_help_menu(client: Client, message: Message, edit=False):
         else:
             await message.reply_text(text=HELP_TEXT, reply_markup=buttons)
 
-# --- PLAY LOGIC (Integrated for reliability) ---
-
-from AnonXMusic.plugins.play import play_command
-@app.on_message(filters.command("play"))
-async def play_handler(client, message):
-    await play_command(client, message)
-
 # --- MAIN STARTUP ---
 
 async def main():
     logger.info("Starting AnonXMusic Bot...")
     try:
-        # Start Pyrogram Bot
         await app.start()
         bot_info = await app.get_me()
         logger.info(f"Pyrogram Bot Client started as @{bot_info.username}")
-        
-        # Start Telethon Assistant
         await userbot.start()
         logger.info("Telethon Assistant Client started!")
-        
-        # Start PyTgCalls
         await call_py.start()
         logger.info("PyTgCalls Client started!")
-
-        # Send startup message to Owner
         try:
             await app.send_message(OWNER_ID, f"🚀 **Bot @{bot_info.username} is online with Cute Anime UI!** ✨")
         except Exception as e:
             logger.error(f"Could not send startup message: {e}")
-
         logger.info("Bot is fully online and listening for messages...")
-        
         await idle()
-        
     except Exception as e:
         logger.error(f"Critical error during startup: {e}", exc_info=True)
     finally:
-        # Graceful shutdown
-        if app.is_connected:
-            await app.stop()
-        if userbot.is_connected():
-            await userbot.disconnect()
+        if app.is_connected: await app.stop()
+        if userbot.is_connected(): await userbot.disconnect()
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
