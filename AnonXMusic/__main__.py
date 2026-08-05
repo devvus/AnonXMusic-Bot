@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from pyrogram import Client, idle
-from config import API_ID, API_HASH, STRING_SESSION, BOT_TOKEN, OWNER_ID, LOG_GROUP_ID
+from config import API_ID, API_HASH, STRING_SESSION, BOT_TOKEN, OWNER_ID
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
@@ -15,20 +15,22 @@ except ImportError:
     HAS_PYTGCALLS = False
     logger.info("PyTgCalls not found.")
 
-# Initialize Clients
+# Initialize Clients with in_memory=True to avoid session file conflicts
 app = Client(
-    "AnonXBotNew",
+    "AnonXBotFinal",
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
-    plugins=dict(root="AnonXMusic")
+    plugins=dict(root="AnonXMusic"),
+    in_memory=True
 )
 
 userbot = Client(
-    "AnonXAssistantNew",
+    "AnonXAssistantFinal",
     api_id=API_ID,
     api_hash=API_HASH,
     session_string=STRING_SESSION,
+    in_memory=True
 )
 
 if HAS_PYTGCALLS:
@@ -51,7 +53,7 @@ async def main():
 
         # Send startup message
         try:
-            await app.send_message(OWNER_ID, "Bot is online and ready!")
+            await app.send_message(OWNER_ID, "🚀 Bot is online and ready on Railway!")
         except Exception as e:
             logger.warning(f"Failed to send startup message to owner: {e}")
 
@@ -68,5 +70,6 @@ async def main():
             await userbot.stop()
 
 if __name__ == "__main__":
+    # Use the same loop for everything
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
