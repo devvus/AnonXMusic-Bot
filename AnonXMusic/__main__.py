@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from pyrogram import Client, idle
+from pyrogram import Client, idle, filters
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from pytgcalls import PyTgCalls
@@ -30,6 +30,11 @@ userbot = TelegramClient(
 # Initialize PyTgCalls with Telethon client
 call_py = PyTgCalls(userbot)
 
+# Global logger to see if ANY message is received
+@app.on_message(group=-1)
+async def log_all_messages(client, message):
+    logger.info(f"DEBUG: Received message from {message.from_user.id if message.from_user else 'Unknown'}: {message.text}")
+
 async def main():
     logger.info("Starting bot and assistant (Telethon)...")
     try:
@@ -47,13 +52,12 @@ async def main():
 
         # Send startup message
         try:
-            await app.send_message(OWNER_ID, "🚀 Bot is online with Telethon Assistant on Railway!")
+            await app.send_message(OWNER_ID, "🚀 Bot is online with Telethon Assistant on Railway! (Debug Mode)")
         except Exception as e:
             logger.warning(f"Failed to send startup message to owner: {e}")
 
         logger.info("Bot is fully online!")
         
-        # We use Pyrogram's idle since it's the main interface
         await idle()
         
     except Exception as e:
