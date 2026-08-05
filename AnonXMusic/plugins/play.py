@@ -20,10 +20,15 @@ async def play_command(client: Client, message: Message):
 
     try:
         ydl_opts = {
-            'format': 'bestaudio',
+            'format': 'bestaudio/best',
             'noplaylist': True,
             'quiet': True,
             'default_search': 'ytsearch',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
         }
         
         # Add cookies if the file exists

@@ -1,23 +1,24 @@
 import asyncio
 import logging
+import os
 from pyrogram import Client, idle, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from pytgcalls import PyTgCalls
 from config import API_ID, API_HASH, STRING_SESSION, BOT_TOKEN, OWNER_ID, START_IMG_URL, SUPPORT_URL, CHANNEL_URL
+from AnonXMusic.plugins.play import play_command
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 logger = logging.getLogger("AnonXMusic")
 
-# Initialize Pyrogram Bot Client
+# Initialize Pyrogram Bot Client (No plugins root to avoid conflicts)
 app = Client(
     "AnonXBotFinal",
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
-    plugins=dict(root="AnonXMusic/plugins"),
     in_memory=True
 )
 
@@ -31,7 +32,7 @@ userbot = TelegramClient(
 # Initialize PyTgCalls with Telethon client
 call_py = PyTgCalls(userbot)
 
-# --- START & HELP HANDLERS (Directly in main for reliability) ---
+# --- HANDLERS ---
 
 @app.on_message(filters.command("start"))
 async def start_command(client: Client, message: Message):
@@ -54,7 +55,10 @@ async def start_command(client: Client, message: Message):
     ])
     
     if START_IMG_URL:
-        await message.reply_photo(photo=START_IMG_URL, caption=caption, reply_markup=buttons)
+        try:
+            await message.reply_photo(photo=START_IMG_URL, caption=caption, reply_markup=buttons)
+        except Exception:
+            await message.reply_text(text=caption, reply_markup=buttons)
     else:
         await message.reply_text(text=caption, reply_markup=buttons)
 
@@ -86,7 +90,10 @@ async def main_menu_callback(client: Client, callback_query: CallbackQuery):
         [InlineKeyboardButton("💬 Support ↗️", url=SUPPORT_URL), InlineKeyboardButton("📢 Channel ↗️", url=CHANNEL_URL)]
     ])
     
-    await callback_query.message.edit_caption(caption=caption, reply_markup=buttons)
+    try:
+        await callback_query.message.edit_caption(caption=caption, reply_markup=buttons)
+    except Exception:
+        await callback_query.message.edit_text(text=caption, reply_markup=buttons)
 
 async def show_help_menu(client: Client, message: Message, edit=False):
     caption = (
@@ -114,16 +121,27 @@ async def show_help_menu(client: Client, message: Message, edit=False):
     ])
     
     if edit:
-        await message.edit_caption(caption=caption, reply_markup=buttons)
+        try:
+            await message.edit_caption(caption=caption, reply_markup=buttons)
+        except Exception:
+            await message.edit_text(text=caption, reply_markup=buttons)
     else:
         if START_IMG_URL:
-            await message.reply_photo(photo=START_IMG_URL, caption=caption, reply_markup=buttons)
+            try:
+                await message.reply_photo(photo=START_IMG_URL, caption=caption, reply_markup=buttons)
+            except Exception:
+                await message.reply_text(text=caption, reply_markup=buttons)
         else:
             await message.reply_text(text=caption, reply_markup=buttons)
 
 @app.on_message(filters.command("ping"))
 async def ping_command(client, message):
     await message.reply_text("🏓 Pong! Bot is active and healthy! ✨")
+
+# Manually register the play command from the plugin
+@app.on_message(filters.command("play"))
+async def play_handler(client, message):
+    await play_command(client, message)
 
 # --- MAIN STARTUP ---
 
@@ -143,7 +161,7 @@ async def main():
         await call_py.start()
         logger.info("PyTgCalls Client started!")
 
-        # Send startup message
+        # Send startup message to Owner
         try:
             await app.send_message(OWNER_ID, f"🚀 Bot @{bot_info.username} is online with Telethon Assistant on Railway!")
         except Exception as e:

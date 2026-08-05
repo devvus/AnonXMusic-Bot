@@ -9,7 +9,7 @@ LOG_GROUP_ID = int(os.getenv("LOG_GROUP_ID", "-1001973634248"))
 
 # Aesthetic Configuration
 START_IMG_URL = os.getenv("START_IMG_URL", "https://images.alphacoders.com/131/1312385.jpeg")
-SUPPORT_URL = os.getenv("SUPPORT_URL", "https://t.me/AnonXSupport")
+SUPPORT_URL = os.getenv("SUPPORT_URL", "https://t.me/infvibe")
 CHANNEL_URL = os.getenv("CHANNEL_URL", "https://t.me/AnonXUpdates")
 
 # yt-dlp Configuration
