@@ -26,9 +26,8 @@ async def play_command(client: Client, message: Message):
     query = " ".join(message.command[1:])
     m = await message.reply_text(f"🔍 **Searching for** `{query}`... ✨")
 
-    # Robust YTDL Options for Downloading
+    # The most aggressive YTDL options possible to bypass blocks
     ydl_opts = {
-        'format': "bestaudio[ext=webm][acodec=opus]/bestaudio/best",
         'outtmpl': f'{DOWNLOAD_DIR}/%(id)s.%(ext)s',
         'noplaylist': True,
         'quiet': True,
@@ -36,54 +35,72 @@ async def play_command(client: Client, message: Message):
         'nocheckcertificate': True,
         'geo_bypass': True,
         'default_search': 'ytsearch',
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        # Use a specific user agent that looks like a mobile device
+        'user_agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
+        # Extractor args to bypass some YouTube restrictions
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+                'skip': ['dash', 'hls']
+            }
+        }
     }
     
     if os.path.exists(COOKIES_FILE_PATH):
         ydl_opts['cookiefile'] = COOKIES_FILE_PATH
+        logger.info(f"Using cookies: {COOKIES_FILE_PATH}")
 
     try:
         loop = asyncio.get_event_loop()
         
         def download_info(q):
-            with YoutubeDL(ydl_opts) as ydl:
-                try:
-                    # First extract info
-                    info = ydl.extract_info(q, download=True)
-                    if 'entries' in info:
-                        info = info['entries'][0]
-                    return info
-                except Exception as e:
-                    logger.error(f"DETAILED YTDL ERROR: {e}")
-                    # Debug: Try to list formats to see what is available from this IP
-                    try:
-                        with YoutubeDL({'quiet': True, 'cookiefile': COOKIES_FILE_PATH if os.path.exists(COOKIES_FILE_PATH) else None}) as ydl_debug:
-                            debug_info = ydl_debug.extract_info(q, download=False)
-                            formats = debug_info.get('formats', [])
-                            format_ids = [f.get('format_id') for f in formats]
-                            logger.info(f"AVAILABLE FORMATS FOR {q}: {format_ids}")
-                    except Exception as de:
-                        logger.error(f"COULD NOT EVEN LIST FORMATS: {de}")
-                    
-                    logger.warning(f"Download failed: {e}. Trying fallback to 'best'...")
-                    ydl.params['format'] = "best"
-                    info = ydl.extract_info(q, download=True)
-                    if 'entries' in info:
-                        info = info['entries'][0]
-                    return info
+            # Try 1: Best Audio only (Fastest)
+            try:
+                opts = ydl_opts.copy()
+                opts['format'] = "bestaudio/best"
+                with YoutubeDL(opts) as ydl:
+                    return ydl.extract_info(q, download=True)
+            except Exception as e:
+                logger.warning(f"Try 1 (bestaudio) failed: {e}. Trying Try 2...")
+                
+            # Try 2: Any best quality (More likely to succeed)
+            try:
+                opts = ydl_opts.copy()
+                opts['format'] = "best"
+                with YoutubeDL(opts) as ydl:
+                    return ydl.extract_info(q, download=True)
+            except Exception as e:
+                logger.warning(f"Try 2 (best) failed: {e}. Trying Try 3 (No format restriction)...")
+            
+            # Try 3: No format restriction at all (Let yt-dlp decide)
+            opts = ydl_opts.copy()
+            if 'format' in opts: del opts['format']
+            with YoutubeDL(opts) as ydl:
+                return ydl.extract_info(q, download=True)
 
         info = await loop.run_in_executor(None, download_info, query)
         
+        if 'entries' in info:
+            info = info['entries'][0]
+            
         video_id = info['id']
         ext = info['ext']
         file_path = os.path.join(DOWNLOAD_DIR, f"{video_id}.{ext}")
         title = info['title']
 
+        # Verify if file actually exists
+        if not os.path.exists(file_path):
+            # Sometimes yt-dlp changes extension during merge
+            files = [f for f in os.listdir(DOWNLOAD_DIR) if f.startswith(video_id)]
+            if files:
+                file_path = os.path.join(DOWNLOAD_DIR, files[0])
+            else:
+                raise Exception("Downloaded file not found on disk.")
+
         music_queue.append({'title': title, 'file_path': file_path, 'chat_id': message.chat.id})
         
         if len(music_queue) == 1:
             try:
-                # Use local file path for MediaStream
                 await call_py.join_group_call(
                     message.chat.id, 
                     MediaStream(file_path)
@@ -99,11 +116,13 @@ async def play_command(client: Client, message: Message):
             await m.edit_text(f"🎼 **Added to queue:** **{title}** at position #{len(music_queue)-1} 🌸")
 
     except Exception as e:
-        logger.error(f"Final Error: {e}")
-        await m.edit_text(f"❌ **YouTube Error:** `{str(e)[:100]}`\n\nTry a different search term! 🌸")
+        logger.error(f"Final Extraction Error: {e}")
+        await m.edit_text(f"❌ **YouTube Error:** `{str(e)[:150]}`\n\nTry a different search term or check cookies! 🌸")
 
-# Cleanup function to be called periodically or on exit
 def cleanup_downloads():
     if os.path.exists(DOWNLOAD_DIR):
-        shutil.rmtree(DOWNLOAD_DIR)
-        os.makedirs(DOWNLOAD_DIR)
+        for f in os.listdir(DOWNLOAD_DIR):
+            if f != ".gitkeep":
+                try:
+                    os.remove(os.path.join(DOWNLOAD_DIR, f))
+                except: pass
