@@ -1,5 +1,6 @@
-Pyrogram==2.0.106
-https://github.com/pytgcalls/pytgcalls/archive/master.tar.gz
+pyrogram
+pytgcalls
+ntgcalls
 yt-dlp
 python-dotenv
 aiohttp
