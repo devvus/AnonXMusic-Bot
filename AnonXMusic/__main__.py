@@ -7,7 +7,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from pytgcalls import PyTgCalls
-from pytgcalls.types import AudioPiped
+from pytgcalls.types import MediaStream # Correct import for PyTgCalls v2
 from yt_dlp import YoutubeDL
 from config import API_ID, API_HASH, STRING_SESSION, BOT_TOKEN, OWNER_ID, START_IMG_URL, SUPPORT_URL, CHANNEL_URL, COOKIES_FILE_PATH
 
@@ -102,7 +102,6 @@ async def play_handler(client: Client, message: Message):
     m = await message.reply_text(f"🔍 **Searching for** `{query}`... ✨")
 
     try:
-        # Most robust format selection: try bestaudio, then any audio, then best overall
         ydl_opts = {
             'format': 'bestaudio/best',
             'noplaylist': True,
@@ -115,22 +114,19 @@ async def play_handler(client: Client, message: Message):
         
         if os.path.exists(COOKIES_FILE_PATH):
             ydl_opts['cookiefile'] = COOKIES_FILE_PATH
-            logger.info(f"Using cookies from {COOKIES_FILE_PATH}")
 
         loop = asyncio.get_event_loop()
         
-        # Function to extract info with fallback formats
         def extract_info(q):
             with YoutubeDL(ydl_opts) as ydl:
                 try:
                     return ydl.extract_info(q, download=False)
-                except Exception as e:
-                    logger.warning(f"First attempt failed: {e}. Trying fallback format...")
-                    ydl.params['format'] = 'ba/b' # Basic bestaudio/best
+                except Exception:
+                    ydl.params['format'] = 'ba/b'
                     try:
                         return ydl.extract_info(q, download=False)
                     except Exception:
-                        ydl.params['format'] = 'best' # Ultimate fallback
+                        ydl.params['format'] = 'best'
                         return ydl.extract_info(q, download=False)
 
         info = await loop.run_in_executor(None, extract_info, query)
@@ -141,12 +137,12 @@ async def play_handler(client: Client, message: Message):
         audio_url = info['url']
         title = info['title']
 
-        # Add to queue logic
         music_queue.append({'title': title, 'url': audio_url, 'chat_id': message.chat.id})
         
         if len(music_queue) == 1:
             try:
-                await call_py.join_group_call(message.chat.id, AudioPiped(audio_url))
+                # MediaStream is the correct way for PyTgCalls v2
+                await call_py.join_group_call(message.chat.id, MediaStream(audio_url))
                 await m.edit_text(f"🎶 **Now playing:** **{title}** ✨")
             except Exception as e:
                 await m.edit_text(f"❌ **Playback Error:** `{e}`")
@@ -155,7 +151,7 @@ async def play_handler(client: Client, message: Message):
             await m.edit_text(f"🎼 **Added to queue:** **{title}** at position #{len(music_queue)-1} 🌸")
 
     except Exception as e:
-        await m.edit_text(f"❌ **Error:** `{str(e)[:100]}`\n\nTry another song or check if the link is correct! 🌸")
+        await m.edit_text(f"❌ **Error:** `{str(e)[:100]}`\n\nTry another song! 🌸")
 
 # --- CALLBACK HANDLERS ---
 
