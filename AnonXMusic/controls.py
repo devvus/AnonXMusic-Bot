@@ -1,52 +1,43 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from AnonXMusic.__main__ import app, call_py, HAS_PYTGCALLS
-from AnonXMusic.play import music_queue, play_next_track
 
-@app.on_message(filters.command("pause"))
+@Client.on_message(filters.command("pause"))
 async def pause_command(client: Client, message: Message):
-    if not HAS_PYTGCALLS:
-        await message.reply_text("Music features disabled in Sandbox.")
-        return
+    from AnonXMusic.__main__ import call_py, HAS_PYTGCALLS
+    if not HAS_PYTGCALLS: return await message.reply_text("Disabled in Sandbox.")
     try:
         await call_py.pause_stream(message.chat.id)
-        await message.reply_text("Music paused! ⏸️")
+        await message.reply_text("Paused ⏸️")
     except Exception as e:
-        await message.reply_text(f"Error pausing music: {e}")
+        await message.reply_text(f"Error: {e}")
 
-@app.on_message(filters.command("resume"))
+@Client.on_message(filters.command("resume"))
 async def resume_command(client: Client, message: Message):
-    if not HAS_PYTGCALLS:
-        await message.reply_text("Music features disabled in Sandbox.")
-        return
+    from AnonXMusic.__main__ import call_py, HAS_PYTGCALLS
+    if not HAS_PYTGCALLS: return await message.reply_text("Disabled in Sandbox.")
     try:
         await call_py.resume_stream(message.chat.id)
-        await message.reply_text("Music resumed! ▶️")
+        await message.reply_text("Resumed ▶️")
     except Exception as e:
-        await message.reply_text(f"Error resuming music: {e}")
+        await message.reply_text(f"Error: {e}")
 
-@app.on_message(filters.command("skip"))
+@Client.on_message(filters.command("skip"))
 async def skip_command(client: Client, message: Message):
-    if not HAS_PYTGCALLS:
-        await message.reply_text("Music features disabled in Sandbox.")
-        return
-    try:
-        if music_queue:
-            await message.reply_text("Skipping to the next track... ⏭️")
-            await play_next_track(client, message.chat.id)
-        else:
-            await message.reply_text("No more tracks in the queue to skip.")
-    except Exception as e:
-        await message.reply_text(f"Error skipping music: {e}")
+    from AnonXMusic.__main__ import call_py, HAS_PYTGCALLS
+    from AnonXMusic.play import music_queue, play_next_track
+    if not HAS_PYTGCALLS: return await message.reply_text("Disabled in Sandbox.")
+    if not music_queue: return await message.reply_text("Queue is empty.")
+    await play_next_track(message.chat.id)
+    await message.reply_text("Skipped ⏭️")
 
-@app.on_message(filters.command(["end", "stop"]))
-async def end_command(client: Client, message: Message):
-    if not HAS_PYTGCALLS:
-        await message.reply_text("Music features disabled in Sandbox.")
-        return
+@Client.on_message(filters.command(["stop", "end"]))
+async def stop_command(client: Client, message: Message):
+    from AnonXMusic.__main__ import call_py, HAS_PYTGCALLS
+    from AnonXMusic.play import music_queue
+    if not HAS_PYTGCALLS: return await message.reply_text("Disabled in Sandbox.")
+    music_queue.clear()
     try:
-        music_queue.clear()
         await call_py.leave_group_call(message.chat.id)
-        await message.reply_text("Music stopped and left voice chat! 👋")
+        await message.reply_text("Stopped and left VC 👋")
     except Exception as e:
-        await message.reply_text(f"Error stopping music: {e}")
+        await message.reply_text(f"Error: {e}")

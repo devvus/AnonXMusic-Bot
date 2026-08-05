@@ -1,29 +1,31 @@
 import asyncio
-import os
-import time
-from pyrogram import Client, filters
-from pyrogram.types import Message
-from config import API_ID, API_HASH, STRING_SESSION, BOT_TOKEN, OWNER_ID, LOG_GROUP_ID, LOG_CHAT_ID, MONGO_DB_URI
+import logging
+from pyrogram import Client, idle
+from config import API_ID, API_HASH, STRING_SESSION, BOT_TOKEN, OWNER_ID, LOG_GROUP_ID
 
-# Optional PyTgCalls for sandbox testing
+# Setup logging
+logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
+logger = logging.getLogger("AnonXMusic")
+
+# Optional PyTgCalls
 try:
     from pytgcalls import PyTgCalls
     HAS_PYTGCALLS = True
 except ImportError:
     HAS_PYTGCALLS = False
-    print("PyTgCalls not found. Music features will be disabled (Sandbox Mode).")
+    logger.info("PyTgCalls not found.")
 
-# Initialize Bot Client (The Interface)
+# Initialize Clients
 app = Client(
-    "AnonXBot",
+    "AnonXBotNew",
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
+    plugins=dict(root="AnonXMusic")
 )
 
-# Initialize Assistant Client (The Streamer)
 userbot = Client(
-    "AnonXAssistant",
+    "AnonXAssistantNew",
     api_id=API_ID,
     api_hash=API_HASH,
     session_string=STRING_SESSION,
@@ -34,44 +36,37 @@ if HAS_PYTGCALLS:
 else:
     call_py = None
 
-# Import handlers AFTER app is defined
-# Note: Handlers should now be registered on 'app'
-from AnonXMusic import start, play, controls
-
 async def main():
-    print("Starting bot and assistant...")
+    logger.info("Starting bot and assistant...")
     try:
         await app.start()
-        print("Bot Client started!")
+        logger.info("Bot Client started!")
         
         await userbot.start()
-        print("Assistant Client started!")
+        logger.info("Assistant Client started!")
         
         if HAS_PYTGCALLS and call_py:
             await call_py.start()
-            print("PyTgCalls Client started!")
-        else:
-            print("Skipping PyTgCalls startup.")
+            logger.info("PyTgCalls Client started!")
 
-        # Send startup message to log group
+        # Send startup message
         try:
-            await app.send_message(LOG_GROUP_ID, "Bot and Assistant are online!")
+            await app.send_message(OWNER_ID, "Bot is online and ready!")
         except Exception as e:
-            print(f"Failed to send startup message: {e}")
+            logger.warning(f"Failed to send startup message to owner: {e}")
 
-        print("Bot is fully online!")
-        await asyncio.Event().wait()
+        logger.info("Bot is fully online!")
+        await idle()
         
     except Exception as e:
-        print(f"Critical error during startup: {e}")
-
-@app.on_message(filters.command("ping"))
-async def ping_command(client: Client, message: Message):
-    start_time = time.time()
-    msg = await message.reply_text("Pinging...")
-    end_time = time.time()
-    latency = round((end_time - start_time) * 1000, 2)
-    await msg.edit_text(f"Pong! Latency: {latency}ms")
+        logger.error(f"Critical error during startup: {e}", exc_info=True)
+    finally:
+        # Graceful shutdown
+        if app.is_connected:
+            await app.stop()
+        if userbot.is_connected:
+            await userbot.stop()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())

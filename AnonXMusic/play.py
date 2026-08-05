@@ -1,23 +1,24 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from AnonXMusic.__main__ import app, userbot, call_py, HAS_PYTGCALLS
 from yt_dlp import YoutubeDL
 
 # Queue for music playback
 music_queue = []
 
-@app.on_message(filters.command("play"))
+@Client.on_message(filters.command("play"))
 async def play_command(client: Client, message: Message):
+    from AnonXMusic.__main__ import call_py, HAS_PYTGCALLS
+    
     if not HAS_PYTGCALLS:
-        await message.reply_text("Music features are currently disabled in this environment (Sandbox). Please deploy to Railway for full functionality.")
+        await message.reply_text("Music features are disabled in Sandbox Mode. Please deploy to Railway.")
         return
 
     if len(message.command) < 2:
-        await message.reply_text("Please provide a song name or link to play.")
+        await message.reply_text("Please provide a song name or link!")
         return
 
     query = " ".join(message.command[1:])
-    await message.reply_text(f"Searching for {query}...")
+    m = await message.reply_text(f"Searching for `{query}`... 🔍")
 
     try:
         with YoutubeDL({'format': 'bestaudio', 'noplaylist': True}) as ydl:
@@ -27,37 +28,28 @@ async def play_command(client: Client, message: Message):
             audio_url = info['url']
             title = info['title']
 
-        # Add to queue and play
         music_queue.append({'title': title, 'url': audio_url})
         if len(music_queue) == 1:
-            await start_playback(client, message.chat.id, audio_url)
-            await message.reply_text(f"Now playing: {title}")
+            await start_playback(chat_id=message.chat.id, audio_url=audio_url)
+            await m.edit_text(f"Now playing: **{title}** 🎶")
         else:
-            await message.reply_text(f"Added to queue: {title}. Position: {len(music_queue) - 1}")
+            await m.edit_text(f"Added to queue: **{title}** at position #{len(music_queue)-1}")
 
     except Exception as e:
-        await message.reply_text(f"Error playing music: {e}")
+        await m.edit_text(f"Error: {e}")
 
-async def start_playback(client: Client, chat_id: int, audio_url: str):
-    if not HAS_PYTGCALLS: return
+async def start_playback(chat_id: int, audio_url: str):
+    from AnonXMusic.__main__ import call_py
+    from pytgcalls.types import AudioPiped
     try:
-        from pytgcalls.types import AudioPiped
-        from pytgcalls import StreamType
-        await call_py.join_group_call(
-            chat_id,
-            AudioPiped(audio_url)
-        )
+        await call_py.join_group_call(chat_id, AudioPiped(audio_url))
     except Exception as e:
-        print(f"Error joining group call: {e}")
+        print(f"Playback error: {e}")
 
-async def play_next_track(client: Client, chat_id: int):
-    if not HAS_PYTGCALLS: return
+async def play_next_track(chat_id: int):
+    from AnonXMusic.__main__ import call_py
     if music_queue:
-        music_queue.pop(0) # Remove current track
+        music_queue.pop(0)
         if music_queue:
             next_track = music_queue[0]
-            await start_playback(client, chat_id, next_track['url'])
-            await client.send_message(chat_id, f"Now playing next: {next_track['title']}")
-        else:
-            await client.send_message(chat_id, "Queue is empty. Leaving voice chat.")
-            await call_py.leave_group_call(chat_id)
+            await start_playback(chat_id, next_track['url'])
